@@ -81,5 +81,5 @@ func readExcelAndSendEmails(filePath string, templatePath string) {
 }
 
 func main() {
-	readExcelAndSendEmails("./Student_Attendance.xlsx", "./mail_template.html")
+	readExcelAndSendEmails("./Assets/Student_Attendance.xlsx", "./mail_template.html")
 }
