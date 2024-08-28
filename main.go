@@ -4,89 +4,82 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
-	"net/smtp"
+	"log"
+	"strconv"
 
+	"github.com/xuri/excelize/v2"
 	"gopkg.in/gomail.v2"
 )
 
-func sendSchedulerMailHTML(subject string, templatePath string, to []string) {
-	// Get HTML Data
-	var body bytes.Buffer
-	t, err := template.ParseFiles(templatePath)
-	t.Execute(&body, struct{ Name string }{Name: "Deepak"})
-	if err != nil {
-		fmt.Println("Error(mSSM001): ", err)
-		return
-	}
-
-	auth := smtp.PlainAuth(
-		"",                         // Identity
-		"deepaksciencee@gmail.com", // Username
-		"emsltlshwapraowk",         // Scheduler - app password
-		"smtp.gmail.com",           // Host for gmail
-	)
-
-	headers := "MIME-version: 1.0;\nContent-Type: text/html; charset=\"UTF-8\";"
-
-	msg := "Subject: " + subject + "\n" + headers + "\n\n" + body.String()
-
-	lerr := smtp.SendMail(
-		"smtp.gmail.com:587", // Address of smtp server
-		auth,
-		"deepaksciencee@gmail.com", // From address
-		to,                         // To Slice
-		[]byte(msg),
-	)
-
-	if lerr != nil {
-		fmt.Println("Error(mSSM002): ", lerr)
-	}
+type Student struct {
+	Name   string
+	Leaves int
+	Email  string // Assuming you have emails in the excel file too
 }
 
-func sendGomail(templatePath string) {
-	// Get HTML Data
+func sendGomail(student Student, templatePath string) {
 	var body bytes.Buffer
 	t, err := template.ParseFiles(templatePath)
-	t.Execute(&body, struct{ Name string }{Name: "Deepak"})
 	if err != nil {
 		fmt.Println("Error(mSSM001): ", err)
 		return
 	}
 
-	// Send mail using gomail
+	// Execute the template with student data
+	t.Execute(&body,
+		struct {
+			Name       string
+			LeaveCount int
+		}{
+			Name:       student.Name,
+			LeaveCount: student.Leaves,
+		})
+
 	m := gomail.NewMessage()
 	m.SetHeader("From", "deepaksciencee@gmail.com")
-	m.SetHeader("To", "deepakshankar52@gmail.com")
-	// m.SetHeader("To", "kabiland04@gmail.com")
-	m.SetHeader("Subject", "Hello Buddy!")
+	m.SetHeader("To", student.Email)
+	m.SetHeader("Subject", "Leave Alert: Action Required")
 	m.SetBody("text/html", body.String())
-	// m.Attach("./Assets/Sujatha_Img.png")
 
 	d := gomail.NewDialer("smtp.gmail.com", 587, "deepaksciencee@gmail.com", "emsltlshwapraowk")
 
-	// Send the email to Bob, Cora and Dan.
 	if err := d.DialAndSend(m); err != nil {
-		panic(err)
+		fmt.Println("Error sending email to", student.Name, ":", err)
+	} else {
+		fmt.Println("Email sent to", student.Name)
+	}
+}
+
+func readExcelAndSendEmails(filePath string, templatePath string) {
+	f, err := excelize.OpenFile(filePath)
+	if err != nil {
+		log.Fatalf("Error opening file: %v", err)
 	}
 
+	// Assuming the sheet is named "Sheet1"
+	rows, err := f.GetRows("Sheet1")
+	if err != nil {
+		log.Fatalf("Error reading rows: %v", err)
+	}
+
+	for _, row := range rows[1:] { // Skipping the header row
+		name := row[0]
+		leaveCount := row[1] // Assuming this is a string representation of the leave count
+		email := row[2]      // Assuming the email is in the third column
+
+		leaveCountInt, err := strconv.Atoi(leaveCount)
+		if err != nil {
+			fmt.Println("Invalid leave count for", name)
+			continue
+		}
+
+		if leaveCountInt == 5 {
+			student := Student{Name: name, Leaves: leaveCountInt, Email: email}
+			sendGomail(student, templatePath)
+		}
+	}
 }
 
 func main() {
-	// sendSchedulerMail(
-	// 	"Second mail buddy",
-	// 	"Content for second mail body",
-	// 	[]string{"deepakshankar52@gmail.com"}
-	// )
-
-	// sendSchedulerMailHTML(
-	// 	"Fourth Mail Buddy",
-	// 	"./test.html",
-	// 	[]string{"deepakshankar52@gmail.com"},
-	// )
-
-	// sendGomail("./test.html")
-
-	sendGomail("./mail_template.html")
-
-	// fmt.Println("hello world")
+	readExcelAndSendEmails("./Student_Attendance.xlsx", "./mail_template.html")
 }
